@@ -221,7 +221,7 @@ class MeanStdFilter(Filter):
         if self.destd:
             x = x / (self.rs.std + 1e-8)
         if self.clip:
-            x = np.clip(x, -self.clip, self.clip)
+            x = np.clip(x, x - 5*self.rs.std, x + 5*self.rs.std)
         return x
 
     def __repr__(self):

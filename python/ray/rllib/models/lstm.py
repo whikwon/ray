@@ -143,39 +143,65 @@ class LSTM(Model):
 
         # Setup the LSTM cell
         if use_tf100_api:
-            lstm = rnn.BasicLSTMCell(cell_size, state_is_tuple=True)
+            lstm1 = rnn.BasicLSTMCell(cell_size, state_is_tuple=True)
+            lstm2 = rnn.BasicLSTMCell(cell_size, state_is_tuple=True)
         else:
-            lstm = rnn.rnn_cell.BasicLSTMCell(cell_size, state_is_tuple=True)
+            lstm1 = rnn.rnn_cell.BasicLSTMCell(cell_size, state_is_tuple=True)
+            lstm2 = rnn.rnn_cell.BasicLSTMCell(cell_size, state_is_tuple=True)
         self.state_init = [
-            np.zeros(lstm.state_size.c, np.float32),
-            np.zeros(lstm.state_size.h, np.float32)
+            np.zeros(lstm1.state_size.c, np.float32),
+            np.zeros(lstm1.state_size.h, np.float32),
+            np.zeros(lstm2.state_size.c, np.float32),
+            np.zeros(lstm2.state_size.h, np.float32)
         ]
 
         # Setup LSTM inputs
         if self.state_in:
-            c_in, h_in = self.state_in
+            c1_in, h1_in, c2_in, h2_in = self.state_in
         else:
-            c_in = tf.placeholder(
-                tf.float32, [None, lstm.state_size.c], name="c")
-            h_in = tf.placeholder(
-                tf.float32, [None, lstm.state_size.h], name="h")
-            self.state_in = [c_in, h_in]
+            c1_in = tf.placeholder(
+                tf.float32, [None, lstm1.state_size.c], name="c1")
+            h1_in = tf.placeholder(
+                tf.float32, [None, lstm1.state_size.h], name="h1")
+            c2_in = tf.placeholder(
+                tf.float32, [None, lstm2.state_size.c], name="c2")
+            h2_in = tf.placeholder(
+                tf.float32, [None, lstm2.state_size.h], name="h2")
+            self.state_in = [c1_in, h1_in, c2_in, h2_in]
 
         # Setup LSTM outputs
         if use_tf100_api:
-            state_in = rnn.LSTMStateTuple(c_in, h_in)
+            state1_in = rnn.LSTMStateTuple(c1_in, h1_in)
+            state2_in = rnn.LSTMStateTuple(c2_in, h2_in)
         else:
-            state_in = rnn.rnn_cell.LSTMStateTuple(c_in, h_in)
-        lstm_out, lstm_state = tf.nn.dynamic_rnn(
-            lstm,
+            state1_in = rnn.rnn_cell.LSTMStateTuple(c1_in, h1_in)
+            state2_in = rnn.rnn_cell.LSTMStateTuple(c2_in, h2_in)
+        lstm1_out, lstm1_state = tf.nn.dynamic_rnn(
+            lstm1,
             last_layer,
-            initial_state=state_in,
             sequence_length=self.seq_lens,
-            time_major=False)
-        self.state_out = list(lstm_state)
+            time_major=False,
+            dtype=tf.float32)
+
+        with tf.variable_scope("value_function"):
+            lstm2_out, lstm2_state = tf.nn.dynamic_rnn(
+                lstm2,
+                last_layer,
+                sequence_length=self.seq_lens,
+                time_major=False,
+                dtype=tf.float32)
+
+        self.value_function = tf.reshape(
+            linear(
+                tf.reshape(lstm2_out, [-1, cell_size]),
+                1, "vf", normc_initializer(0.01)),
+            [-1])
+
+        self.state_out = list(lstm1_state) + list(lstm2_state)
 
         # Compute outputs
-        last_layer = tf.reshape(lstm_out, [-1, cell_size])
+        last_layer = tf.reshape(lstm1_out, [-1, cell_size])
         logits = linear(last_layer, num_outputs, "action",
                         normc_initializer(0.01))
+
         return logits, last_layer

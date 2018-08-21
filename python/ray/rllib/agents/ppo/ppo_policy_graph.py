@@ -153,19 +153,7 @@ class PPOPolicyGraph(TFPolicyGraph):
         self.logits = self.model.outputs
         curr_action_dist = dist_cls(self.logits)
         self.sampler = curr_action_dist.sample()
-        if self.config["use_gae"]:
-            vf_config = self.config["model"].copy()
-            # Do not split the last layer of the value function into
-            # mean parameters and standard deviation parameters and
-            # do not make the standard deviations free variables.
-            vf_config["free_log_std"] = False
-            vf_config["use_lstm"] = False
-            with tf.variable_scope("value_function"):
-                self.value_function = ModelCatalog.get_model(
-                    obs_ph, 1, vf_config).outputs
-            self.value_function = tf.reshape(self.value_function, [-1])
-        else:
-            self.value_function = tf.zeros(shape=tf.shape(obs_ph)[:1])
+        self.value_function = self.model.value_function
 
         self.loss_obj = PPOLoss(
             action_space,
