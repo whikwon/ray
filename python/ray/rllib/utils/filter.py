@@ -84,7 +84,7 @@ class RunningStat(object):
             delta = x - self._M
             self._M[...] += delta / self._n
             delta_new = x - self._M
-            self._S[...] = (self._S[...] + delta * delta_new) / n1
+            self._S[...] += delta * delta_new
 
     def update(self, other):
         n1 = self._n
